@@ -167,7 +167,6 @@ app.put('/customers/:id', async (req,res) => {
     const isValid = schema.validate(req.body)
     if (isValid.error) return res.sendStatus(400)
 
-
     try {
         if(cpf) {
             const cpfExists = await connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
@@ -180,8 +179,6 @@ app.put('/customers/:id', async (req,res) => {
         cpf = req.body.cpf || customer.rows[0].cpf
         phone = req.body.phone || customer.rows[0].phone
         birthday = req.body.birthday || customer.rows[0].birthday
-
-        
     
         const update = await connection.query('UPDATE customers SET name = $1, cpf = $2, phone = $3, birthday = $4 WHERE id = $5 returning *', [name, cpf, phone, birthday, id]) 
         return res.send(update.rows[0])
@@ -271,12 +268,13 @@ app.post('/rentals/:id/return', async (req,res) => {
     }
 })
 
-app.delete('/rentals/:id', async (req,res) => {//falta testar
+app.delete('/rentals/:id', async (req,res) => {
     const rentalId = req.params.id
 
     try {
         const rentalExists = await connection.query('SELECT * FROM rentals WHERE id = $1', [rentalId])
         if(!rentalExists.rows.length) return res.sendStatus(404)
+        console.log(rentalExists.rows[0])
         if(rentalExists.rows[0].returnDate) return res.sendStatus(400)
 
         await connection.query('DELETE FROM rentals WHERE id = $1', [rentalId])
