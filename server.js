@@ -334,12 +334,10 @@ app.post('/rentals/:id/return', async (req,res) => {
 
         const game = await connection.query('SELECT * FROM games WHERE id = $1', [rental.rows[0].gameId])
 
-        const today = dayjs();
         const initialDay = rental.rows[0].rentDate
-        const lateDays = Math.round((new Date(today).getTime() - new Date(initialDay).getTime())/86400000);
+        const lateDays = Math.ceil((new Date(today).getTime() - new Date(initialDay).getTime())/86400000) - rental.rows[0].daysRented;
+        const fee = (lateDays > 0) ? (lateDays * (game.rows[0].pricePerDay)) : 0;
 
-        const fee = lateDays * (game.rows[0].pricePerDay);
-        console.log(fee)
 
         await connection.query('UPDATE rentals SET "returnDate" = $1, "delayFee" = $2 WHERE id = $3',
                                 [today, fee, rentalId])
