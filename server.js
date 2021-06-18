@@ -50,9 +50,20 @@ app.post('/categories', async (req,res) => {
 })
 
 app.get('/games', async (req,res) => {
+    const name = req.query.name
 
-    const result = await connection.query('SELECT * FROM games JOIN categories ON categories."categoryId"=categories.id')
-    return res.send(result)
+    try {
+        if(name) {
+            await connection.query('SELECT games.* categories.name FROM games JOIN categories ON games."categoryId" = categories.id WHERE name ILIKE $1', [name + '%']);
+            return res.send('sucesso')
+        }
+    
+        const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id')
+        return res.status(201).send(result)
+    }
+    catch {
+        return res.sendStatus(404)
+    }
     //Response: lista dos jogos encontrados, seguindo o formato abaixo (incluindo o nome da categoria conforme destacado)
     //Regras:
     //Caso seja passado um parâmetro name na query string da requisição, 
@@ -60,7 +71,19 @@ app.get('/games', async (req,res) => {
     //Para a rota /games?name=ba, deve ser retornado uma array somente com os jogos que comecem com "ba", como "Banco Imobiliário", "Batalha Naval", etc
 })
 
-app.post('/games', (req,res) => {
+app.post('/games', async (req,res) => {
+
+    const {name, image, stockTotal, categoryId, pricePerDay} = req.body
+
+    try{
+        const result = await connection.query('INSERT INTO games (name, image, "stockTotal", "categoryId", "pricePerDay") VALUES ($1, $2, $3, $4, $5)', 
+        [name, image, stockTotal, categoryId, pricePerDay])
+
+        return res.sendStatus(201)
+    }
+    catch (e){
+        return res.sendStatus(404) && console.log(e)
+    }
     //Request: body no formato:{name: 'Banco Imobiliário', image: 'http://', stockTotal: 3, categoryId: 1, pricePerDay: 1500}
     //Response: status 201, sem dados
     //Regras: 
