@@ -54,79 +54,128 @@ app.get('/games', async (req,res) => {
 
     try {
         if(name) {
-            await connection.query('SELECT games.* categories.name FROM games JOIN categories ON games."categoryId" = categories.id WHERE name ILIKE $1', [name + '%']);
-            return res.send('sucesso')
+            const result = await connection.query('SELECT games.* categories.name FROM games JOIN categories ON games."categoryId" = categories.id WHERE name ILIKE $1', [`${name}%`]);
+            return res.send(result.rows)
         }
-    
+
         const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id')
-        return res.status(201).send(result)
+        return res.status(201).send(result.rows)
     }
     catch {
         return res.sendStatus(404)
     }
-    //Response: lista dos jogos encontrados, seguindo o formato abaixo (incluindo o nome da categoria conforme destacado)
-    //Regras:
-    //Caso seja passado um parâmetro name na query string da requisição, 
-    //os jogos devem ser filtrados para retornar somente os que começam com a string passada (case insensitive).
-    //Para a rota /games?name=ba, deve ser retornado uma array somente com os jogos que comecem com "ba", como "Banco Imobiliário", "Batalha Naval", etc
 })
 
 app.post('/games', async (req,res) => {
 
     const {name, image, stockTotal, categoryId, pricePerDay} = req.body
 
+    const schema = joi.object({
+        name: joi.string().required(),
+        image: joi.string().uri().required(),
+        stockTotal: joi.number().positive().integer().required(),
+        categoryId: joi.number().positive().integer().required(),
+        pricePerDay: joi.number().positive().integer().required()
+    })
+    const isValid = schema.validate(req.body)
+    if(isValid.error) return res.sendStatus(400)
+
     try{
-        const result = await connection.query('INSERT INTO games (name, image, "stockTotal", "categoryId", "pricePerDay") VALUES ($1, $2, $3, $4, $5)', 
+        const categories = await connection.query('SELECT * FROM categories WHERE id = $1', [categoryId])
+        if(!categories.rows.length) return res.sendStatus(400)
+        
+        const nameExists = await connection.query('SELECT * FROM games WHERE name = $1', [name])
+        if(nameExists.rows.length) return res.sendStatus(409)
+
+        await connection.query('INSERT INTO games (name, image, "stockTotal", "categoryId", "pricePerDay") VALUES ($1, $2, $3, $4, $5)', 
         [name, image, stockTotal, categoryId, pricePerDay])
 
         return res.sendStatus(201)
     }
     catch (e){
-        return res.sendStatus(404) && console.log(e)
+        console.log(e)
+        return res.sendStatus(404)
     }
-    //Request: body no formato:{name: 'Banco Imobiliário', image: 'http://', stockTotal: 3, categoryId: 1, pricePerDay: 1500}
-    //Response: status 201, sem dados
-    //Regras: 
-    //name não pode estar vazio; 
-    //stockTotal e pricePerDay devem ser maiores que 0; 
-    //categoryId deve ser um id de categoria existente; 
-    //⇒ nesses casos, deve retornar status 400
-    //name não pode ser um nome de jogo já existente ⇒ nesse caso deve retornar status 409
 })
 
-app.get('/customers', (req,res) => {
-    //Response: lista com todos os clientes
-    //Regras: Caso seja passado um parâmetro cpf na query string da requisição, 
-    //os clientes devem ser filtrados para retornar somente os com CPF que comecem com a string passada
+app.get('/customers', async (req,res) => { //falta testar
+    const cpf = req.query.cpf
+
+    try {
+        if(cpf) {
+            await connection.query('SELECT * FROM customers WHERE cpf ILIKE $1', [`${cpf}$`]);
+            return res.send(result.rows)
+        }
+        const result = await connection.query('SELECT * FROM customers');
+        return res.send(result.rows);
+    }
+    catch {
+        return res.sendStatus(404)
+    }
 })
 
-app.get('/customers/:id', (req,res) => {
-    //Response: somente o objeto do usuário com o id passado
-    //Se o cliente com id dado não existir, deve responder com status 404
+app.get('/customers/:id', async (req,res) => { //falta testar
+    const id = +req.params.id
+
+    try {
+        const result = await connection.query('SELECT * FROM customers WHERE id = $1', [id])
+        if(!result.rows.length) return res.sendStatus(404)
+        return res.send(result.rows)
+    }
+    catch {
+        return res.send(404)
+    }
 })
 
-app.post('/customers', (req,res) => {
-    //Request: body no formato: {name: 'João Alfredo', phone: '21998899222', cpf: '01234567890', birthday: '1992-10-05'}
-    //Response: status 201, sem dados
-    //Regras: 
-    //- `cpf` deve ser uma string com 11 caracteres numéricos; 
-    //`phone` deve ser uma string com 10 ou 11 caracteres numéricos; 
-    //`name` não pode ser uma string vazia; 
-    //`birthday` deve ser uma data válida; 
-    //⇒ nesses casos, deve retornar **status 400**
-    //cpf não pode ser de um cliente já existente; ⇒ nesse caso deve retornar status 409
+app.post('/customers', (req,res) => { //falta testar
+
+    const {name, phone, cpf, birthday} = req.body
+
+    const schema = joi.object ({
+        name: joi.string().required(),
+        cpf: joi.string().pattern(/^[0-9]{3}\.[0-9]{3}\.[0-9]{3}\-[0-9]{2}$/, "CPF inválido"),
+        phone: joi.string().pattern(/{10,11}/),
+        birthday: joi.date().format('YYYY-MM-DD').utc()
+    })
+    const isValid = schema.validate(req.body)
+    if (isValid.error) return res.sendStatus(400)
+
+    try {
+        const cpfExists = await connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
+        if(cpfExists.rows.length) return res.sendStatus(409)
+        await connection.query('INSERT INTO customers (name, phone, cpf, birthday) VALUES ($1, $2, $3, $4)', [name, phone, cpf, birthday])
+        return res.sendStatus(201)
+    }
+    catch {
+        return res.sendStatus(404)
+    }
 })
 
 app.put('/customers/:id', (req,res) => {
-    //Request: body no formato: {name: 'João Alfredo',phone: '21998899222',cpf: '01234567890',birthday: '1992-10-05'}
-    //Response: status 200, sem dados
-    //Regras:
-    //cpf deve ser uma string com 11 caracteres numéricos; 
-    //phone deve ser uma string com 10 ou 11 caracteres numéricos; 
-    //name não pode ser uma string vazia; 
-    //birthday deve ser uma data válida 
-    //⇒ nesses casos, deve retornar status 400
-    //cpf não pode ser de um cliente já existente ⇒ nesse caso deve retornar status 409
+
+    const id = +req.params.id
+    const {name, phone, cpf, birthday} = req.body
+
+    const schema = joi.object ({
+        name: joi.string().required(),
+        cpf: joi.string().pattern(/^[0-9]{3}\.[0-9]{3}\.[0-9]{3}\-[0-9]{2}$/, "CPF inválido"),
+        phone: joi.string().pattern(/{10,11}/),
+        birthday: joi.date().format('YYYY-MM-DD').utc()
+    })
+    const isValid = schema.validate(req.body)
+    if (isValid.error) return res.sendStatus(400)
+
+
+    try {
+        const cpfExists = await connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
+        if(cpfExists.rows.length) return res.sendStatus(409)
+    
+        const update = await connection.query('UPDATE customers (name, cpf, phone, birthday) SET ($1, $2, $3, $4) WHERE id = $5;', [name, cpf, phone, birthday, id])
+        return res.sendStatus(200)
+    }
+    catch {
+        return res.sendStatus(404)
+    }
 })
 
 app.get('/rentals', (req,res) => {
