@@ -30,12 +30,12 @@ app.get('/categories', async (req,res) => {
         }
 
         if(limit) {
-            const result = await connection.query('SELECT * FROM categories LIMIT $1', [0, limit-1])
+            const result = await connection.query('SELECT * FROM categories LIMIT $1', [limit-1])
             return res.send(result.rows)
         }
 
         if(limit && offset) {
-            const result = await connection.query('SELECT * FROM categories LIMIT $1', [offset, limit-1])
+            const result = await connection.query('SELECT * FROM categories LIMIT [$1, $2]', [offset, limit-1])
             return res.send(result.rows)
         }
 
@@ -71,11 +71,23 @@ app.post('/categories', async (req,res) => {
 
 app.get('/games', async (req,res) => {
     const name = req.query.name
+    const offset = req.query.offset
+    const limit = req.query.limit
 
     try {
         if(name) {
             const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id WHERE name ILIKE $1', [`${name}%`]);
             return res.send(result.rows)
+        }
+
+        if (offset) {
+            const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id OFFSET $1 ROWS', [offset])
+        }
+        if (limit) {
+            const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id LIMIT $1', [limit-1])
+        }
+        if (offset && offset) {
+            const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id LIMIT [$1, $2]', [offset, limit-1])
         }
 
         const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id')
@@ -120,12 +132,30 @@ app.post('/games', async (req,res) => {
 
 app.get('/customers', async (req,res) => {
     const cpf = req.query.cpf
+    const offset = req.query.offset
+    const limit = req.query.limit
 
     try {
         if(cpf) {
             await connection.query('SELECT * FROM customers WHERE cpf ILIKE $1', [`${cpf}$`]);
             return res.send(result.rows)
         }
+
+        if(offset) {
+            const result = await connection.query('SELECT * FROM customers WHERE id = $1 OFFSET $2 ROWS', [id, offset])
+            return res.send(result.rows)
+        }
+
+        if(limit) {
+            const result = await connection.query('SELECT * FROM customers WHERE id = $1 LIMIT $2', [id, offset])
+            return res.send(result.rows)
+        }
+
+        if(offset && limit) {
+            const result = await connection.query('SELECT * FROM customers WHERE id = $1 LIMIT [$2,$3]', [id, offset, limit - 1])
+            return res.send(result.rows)
+        }
+
         const result = await connection.query('SELECT * FROM customers');
         return res.send(result.rows);
     }
@@ -140,6 +170,7 @@ app.get('/customers/:id', async (req,res) => {
     try {
         const result = await connection.query('SELECT * FROM customers WHERE id = $1', [id])
         if(!result.rows.length) return res.sendStatus(404)
+
         return res.send(result.rows)
     }
     catch {
@@ -212,45 +243,44 @@ app.get('/rentals', async (req,res) => {
 
     const customerId = req.query.customerId
     const gameId = req.query.gameId
+    const offset = req.query.offset
+    const limit = req.query.limit
+
+    const queryBase = `SELECT rentals.*, 
+                        jsonb_build_object('name', customers.name, 'id', customers.id) AS customer,
+                        jsonb_build_object('id', games.id, 'name', games.name, 'categoryId', 
+                        games."categoryId", 'categoryName', categories.name) 
+                        AS game            
+                        FROM rentals 
+                        JOIN customers ON rentals."customerId" = customers.id
+                        JOIN games ON rentals."gameId" = games.id
+                        JOIN categories ON categories.id = games."categoryId"`
 
     try {
+        if(offset) {
+            const result = await connection.query(`${queryBase} OFFSET $1 ROWS`, [offset]);
+            return res.send(result.rows).status(200) 
+        }
+        if(limit) {
+            const result = await connection.query(`${queryBase} LIMIT $1`, [limit]);
+            return res.send(result.rows).status(200)
+        }
+        if(offset && limit) {
+            const result = await connection.query(`${queryBase} LIMIT [$1, $2]`, [offset, limit]);
+            return res.send(result.rows).status(200)
+        }
+        
         if(customerId) {
-            const result = await connection.query(`SELECT rentals.*, 
-                                                    jsonb_build_object('name', customers.name, 'id', customers.id) AS customer,
-                                                    jsonb_build_object('id', games.id, 'name', games.name, 'categoryId', 
-                                                    games."categoryId", 'categoryName', categories.name) 
-                                                    AS game            
-                                                    FROM rentals 
-                                                    JOIN customers ON rentals."customerId" = customers.id
-                                                    JOIN games ON rentals."gameId" = games.id
-                                                    JOIN categories ON categories.id = games."categoryId"
-                                                    WHERE rentals."customerId" = $1`, [customerId])
+            const result = await connection.query(`${queryBase} WHERE rentals."customerId" = $1`, [customerId])
             return res.send(result.rows)
         }
 
         if(gameId) {
-            const result = await connection.query(`SELECT rentals.*, 
-                                                jsonb_build_object('name', customers.name, 'id', customers.id) AS customer,
-                                                jsonb_build_object('id', games.id, 'name', games.name, 'categoryId', 
-                                                games."categoryId", 'categoryName', categories.name) 
-                                                AS game            
-                                                FROM rentals 
-                                                JOIN customers ON rentals."customerId" = customers.id
-                                                JOIN games ON rentals."gameId" = games.id
-                                                JOIN categories ON categories.id = games."categoryId"
-                                                WHERE rentals."gameId" = $1`, [gameId])
+            const result = await connection.query(`${queryBase} WHERE rentals."gameId" = $1`, [gameId])
             return res.send(result.rows)
         }
-
-        const result = await connection.query(`SELECT rentals.*, 
-                                                jsonb_build_object('name', customers.name, 'id', customers.id) AS customer,
-                                                jsonb_build_object('id', games.id, 'name', games.name, 'categoryId', 
-                                                games."categoryId", 'categoryName', categories.name) 
-                                                AS game            
-                                                FROM rentals 
-                                                JOIN customers ON rentals."customerId" = customers.id
-                                                JOIN games ON rentals."gameId" = games.id
-                                                JOIN categories ON categories.id = games."categoryId"`);
+        
+        const result = await connection.query(`${queryBase}`);
         return res.send(result.rows).status(200) 
     }
 
@@ -309,6 +339,7 @@ app.post('/rentals/:id/return', async (req,res) => {
 
         const game = await connection.query('SELECT * FROM games WHERE id = $1', [rental.rows[0].gameId])
 
+        const today = dayjs();
         const initialDay = rental.rows[0].rentDate
         const lateDays = Math.round((new Date(today).getTime() - new Date(initialDay).getTime())/86400000);
 
