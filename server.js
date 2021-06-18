@@ -19,7 +19,26 @@ const connection = new Pool ({
 })
 
 app.get('/categories', async (req,res) => {
+    const offset = req.query.offset
+    const limit = req.query.limit
+
     try {
+
+        if(offset) {
+            const result = await connection.query('SELECT * FROM categories OFFSET $1 ROWS', [offset])
+            return res.send(result.rows)
+        }
+
+        if(limit) {
+            const result = await connection.query('SELECT * FROM categories LIMIT $1', [0, limit-1])
+            return res.send(result.rows)
+        }
+
+        if(limit && offset) {
+            const result = await connection.query('SELECT * FROM categories LIMIT $1', [offset, limit-1])
+            return res.send(result.rows)
+        }
+
         const result = await connection.query('SELECT * FROM categories');
         return res.send(result.rows);
     }
