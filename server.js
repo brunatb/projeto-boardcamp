@@ -58,7 +58,6 @@ app.post('/categories', async (req,res) => {
     try {
         const name = req.body.name
         const verifyName = await connection.query('SELECT * FROM categories WHERE name = $1', [name])
-        console.log(verifyName)
         if (verifyName.rows.length) return res.sendStatus(409)
 
         await connection.query('INSERT INTO categories (name) VALUES ($1)', [req.body.name])
@@ -90,7 +89,7 @@ app.get('/games', async (req,res) => {
             const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id LIMIT [$1, $2]', [offset, limit-1])
         }
 
-        const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id')
+        const result = await connection.query('SELECT games.*, categories.name AS category FROM games JOIN categories ON games."categoryId" = categories.id')
         return res.status(201).send(result.rows)
     }
     catch {
@@ -125,7 +124,6 @@ app.post('/games', async (req,res) => {
         return res.sendStatus(201)
     }
     catch (e){
-        console.log(e)
         return res.sendStatus(404)
     }
 })
@@ -198,7 +196,6 @@ app.post('/customers', async (req,res) => {
         return res.sendStatus(201)
     }
     catch (e) {
-        console.log(e)
         return res.sendStatus(404)
     }
 })
@@ -234,7 +231,6 @@ app.put('/customers/:id', async (req,res) => {
         return res.send(update.rows[0])
     }
     catch (e) {
-        console.log(e)
         return res.sendStatus(500)
     }
 })
@@ -279,7 +275,7 @@ app.get('/rentals', async (req,res) => {
             const result = await connection.query(`${queryBase} WHERE rentals."gameId" = $1`, [gameId])
             return res.send(result.rows)
         }
-        
+
         const result = await connection.query(`${queryBase}`);
         return res.send(result.rows).status(200) 
     }
@@ -322,7 +318,6 @@ app.post('/rentals', async (req,res) => {
         return res.sendStatus(201)
     }
     catch (e) {
-        console.log(e)
         return res.sendStatus(500)
     }
 })
@@ -361,7 +356,6 @@ app.delete('/rentals/:id', async (req,res) => {
     try {
         const rentalExists = await connection.query('SELECT * FROM rentals WHERE id = $1', [rentalId])
         if(!rentalExists.rows.length) return res.sendStatus(404)
-        console.log(rentalExists.rows[0])
         if(rentalExists.rows[0].returnDate) return res.sendStatus(400)
 
         await connection.query('DELETE FROM rentals WHERE id = $1', [rentalId])
