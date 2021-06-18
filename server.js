@@ -89,7 +89,7 @@ app.get('/games', async (req,res) => {
             const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id LIMIT [$1, $2]', [offset, limit-1])
         }
 
-        const result = await connection.query('SELECT games.*, categories.name AS category FROM games JOIN categories ON games."categoryId" = categories.id')
+        const result = await connection.query('SELECT games.*, categories.name AS "categoryName" FROM games JOIN categories ON games."categoryId" = categories.id')
         return res.status(201).send(result.rows)
     }
     catch {
@@ -339,6 +339,7 @@ app.post('/rentals/:id/return', async (req,res) => {
         const lateDays = Math.round((new Date(today).getTime() - new Date(initialDay).getTime())/86400000);
 
         const fee = lateDays * (game.rows[0].pricePerDay);
+        console.log(fee)
 
         await connection.query('UPDATE rentals SET "returnDate" = $1, "delayFee" = $2 WHERE id = $3',
                                 [today, fee, rentalId])
