@@ -54,7 +54,7 @@ app.get('/games', async (req,res) => {
 
     try {
         if(name) {
-            const result = await connection.query('SELECT games.* categories.name FROM games JOIN categories ON games."categoryId" = categories.id WHERE name ILIKE $1', [`${name}%`]);
+            const result = await connection.query('SELECT games.*, categories.name FROM games JOIN categories ON games."categoryId" = categories.id WHERE name ILIKE $1', [`${name}%`]);
             return res.send(result.rows)
         }
 
@@ -127,15 +127,15 @@ app.get('/customers/:id', async (req,res) => { //falta testar
     }
 })
 
-app.post('/customers', (req,res) => { //falta testar
+app.post('/customers', async (req,res) => { //falta testar
 
     const {name, phone, cpf, birthday} = req.body
 
     const schema = joi.object ({
         name: joi.string().required(),
-        cpf: joi.string().pattern(/^[0-9]{3}\.[0-9]{3}\.[0-9]{3}\-[0-9]{2}$/, "CPF inválido"),
-        phone: joi.string().pattern(/{10,11}/),
-        birthday: joi.date().format('YYYY-MM-DD').utc()
+        cpf: joi.string().pattern(/^[0-9]{3}[0-9]{3}[0-9]{3}[0-9]{2}$/, "CPF inválido").required(),
+        phone: joi.string().pattern(/[10-11]/).required(),
+        birthday: joi.date().required()//.format('YYYY-MM-DD').required()
     })
     const isValid = schema.validate(req.body)
     if (isValid.error) return res.sendStatus(400)
@@ -146,12 +146,13 @@ app.post('/customers', (req,res) => { //falta testar
         await connection.query('INSERT INTO customers (name, phone, cpf, birthday) VALUES ($1, $2, $3, $4)', [name, phone, cpf, birthday])
         return res.sendStatus(201)
     }
-    catch {
+    catch (e) {
+        console.log(e)
         return res.sendStatus(404)
     }
 })
 
-app.put('/customers/:id', (req,res) => {
+app.put('/customers/:id', async (req,res) => { //falta testar
 
     const id = +req.params.id
     const {name, phone, cpf, birthday} = req.body
@@ -160,7 +161,7 @@ app.put('/customers/:id', (req,res) => {
         name: joi.string().required(),
         cpf: joi.string().pattern(/^[0-9]{3}\.[0-9]{3}\.[0-9]{3}\-[0-9]{2}$/, "CPF inválido"),
         phone: joi.string().pattern(/{10,11}/),
-        birthday: joi.date().format('YYYY-MM-DD').utc()
+        birthday: joi.date().format('YYYY-MM-DD')
     })
     const isValid = schema.validate(req.body)
     if (isValid.error) return res.sendStatus(400)
@@ -178,7 +179,12 @@ app.put('/customers/:id', (req,res) => {
     }
 })
 
-app.get('/rentals', (req,res) => {
+app.get('/rentals', async (req,res) => {
+
+    const result = await connection.query(`SELECT rentals.*, customers.* AS "rentals.customers", games.* AS "rentals.games"
+                                            FROM rentals FULL JOIN customers ON rentals."customerId" = customers.id 
+                                            FULL JOIN games ON games.id = rentals."gameId"`);
+    return res.send(result.rows)
     //Response: lista com todos os aluguéis, contendo o customer e o game do aluguel em questão em cada aluguel
     //Regras: 
     //Caso seja passado um parâmetro customerId na query string da requisição, 
