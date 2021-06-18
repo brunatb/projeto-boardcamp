@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
+import joi from 'joi';
 
 const app = express();
 app.use(cors());
@@ -19,12 +20,11 @@ const connection = new Pool ({
 app.get('/categories', async (req,res) => {
     try {
         const result = await connection.query('SELECT * FROM categories');
-        res.send(result.rows);
+        return res.send(result.rows);
     }
     catch {
-        res.sendStatus(404)
+        return res.sendStatus(404)
     }
-    //Response: lista de todas as categorias cada no formato acima: [{id: 1, name: 'Estratégia'},{id: 2, name: 'Investigação'}]
 })
 
 app.post('/categories', async (req,res) => {
@@ -37,13 +37,12 @@ app.post('/categories', async (req,res) => {
 
     try {
         const name = req.body.name
-        const nameCategories = await connection.query('SELECT name FROM categories')
-        if (nameCategories.includes(name)) {
-            return res.sendStatus(409)
-        }
+        const verifyName = await connection.query('SELECT * FROM categories WHERE name = $1', [name])
+        console.log(verifyName)
+        if (verifyName.rows.length) return res.sendStatus(409)
 
-        await connection.query('INSERT INTO categories (name) VALUES $1', [name])
-        res.sendStatus(201)
+        await connection.query('INSERT INTO categories (name) VALUES ($1)', [req.body.name])
+        return res.sendStatus(201)
     }
     catch {
         return res.sendStatus(404)
@@ -52,8 +51,8 @@ app.post('/categories', async (req,res) => {
 
 app.get('/games', async (req,res) => {
 
-    const result = await connection.query('SELECT * FROM games')
-    res.send(result)
+    const result = await connection.query('SELECT * FROM games JOIN categories ON categories."categoryId"=categories.id')
+    return res.send(result)
     //Response: lista dos jogos encontrados, seguindo o formato abaixo (incluindo o nome da categoria conforme destacado)
     //Regras:
     //Caso seja passado um parâmetro name na query string da requisição, 
