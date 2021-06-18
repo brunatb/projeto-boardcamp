@@ -1,11 +1,12 @@
-import express from 'express';
-import cors from 'cors';
-import pg from 'pg';
-import joi from 'joi';
+import express from 'express'
+import cors from 'cors'
+import pg from 'pg'
+import joi from 'joi'
+import dayjs from 'dayjs'
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const app = express()
+app.use(cors())
+app.use(express.json())
 
 const { Pool } = pg;
 
@@ -98,7 +99,7 @@ app.post('/games', async (req,res) => {
     }
 })
 
-app.get('/customers', async (req,res) => { //falta testar
+app.get('/customers', async (req,res) => {
     const cpf = req.query.cpf
 
     try {
@@ -114,7 +115,7 @@ app.get('/customers', async (req,res) => { //falta testar
     }
 })
 
-app.get('/customers/:id', async (req,res) => { //falta testar
+app.get('/customers/:id', async (req,res) => {
     const id = +req.params.id
 
     try {
@@ -127,7 +128,7 @@ app.get('/customers/:id', async (req,res) => { //falta testar
     }
 })
 
-app.post('/customers', async (req,res) => { //falta testar
+app.post('/customers', async (req,res) => {
 
     const {name, phone, cpf, birthday} = req.body
 
@@ -135,7 +136,7 @@ app.post('/customers', async (req,res) => { //falta testar
         name: joi.string().required(),
         cpf: joi.string().pattern(/^[0-9]{3}[0-9]{3}[0-9]{3}[0-9]{2}$/, "CPF inválido").required(),
         phone: joi.string().pattern(/[10-11]/).required(),
-        birthday: joi.date().required()//.format('YYYY-MM-DD').required()
+        birthday: joi.date().required()
     })
     const isValid = schema.validate(req.body)
     if (isValid.error) return res.sendStatus(400)
@@ -152,30 +153,42 @@ app.post('/customers', async (req,res) => { //falta testar
     }
 })
 
-app.put('/customers/:id', async (req,res) => { //falta testar
+app.put('/customers/:id', async (req,res) => {
 
     const id = +req.params.id
-    const {name, phone, cpf, birthday} = req.body
+    let {name, phone, cpf, birthday} = req.body
 
     const schema = joi.object ({
-        name: joi.string().required(),
-        cpf: joi.string().pattern(/^[0-9]{3}\.[0-9]{3}\.[0-9]{3}\-[0-9]{2}$/, "CPF inválido"),
-        phone: joi.string().pattern(/{10,11}/),
-        birthday: joi.date().format('YYYY-MM-DD')
+        name: joi.string(),
+        cpf: joi.string().pattern(/^[0-9]{3}[0-9]{3}[0-9]{3}[0-9]{2}$/, "CPF inválido"),
+        phone: joi.string().pattern(/[10-11]/),
+        birthday: joi.date()
     })
     const isValid = schema.validate(req.body)
     if (isValid.error) return res.sendStatus(400)
 
 
     try {
-        const cpfExists = await connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
-        if(cpfExists.rows.length) return res.sendStatus(409)
+        if(cpf) {
+            const cpfExists = await connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
+            if(cpfExists.rows.length) return res.sendStatus(409)
+        }
+
+        const customer = await connection.query('SELECT * FROM customers WHERE id = $1', [id])
+        if (!customer.rows.length) return res.sendStatus(404)
+        name = req.body.name || customer.rows[0].name
+        cpf = req.body.cpf || customer.rows[0].cpf
+        phone = req.body.phone || customer.rows[0].phone
+        birthday = req.body.birthday || customer.rows[0].birthday
+
+        
     
-        const update = await connection.query('UPDATE customers (name, cpf, phone, birthday) SET ($1, $2, $3, $4) WHERE id = $5;', [name, cpf, phone, birthday, id])
-        return res.sendStatus(200)
+        const update = await connection.query('UPDATE customers SET name = $1, cpf = $2, phone = $3, birthday = $4 WHERE id = $5 returning *', [name, cpf, phone, birthday, id]) 
+        return res.send(update.rows[0])
     }
-    catch {
-        return res.sendStatus(404)
+    catch (e) {
+        console.log(e)
+        return res.sendStatus(500)
     }
 })
 
@@ -193,7 +206,30 @@ app.get('/rentals', async (req,res) => {
     //os aluguéis devem ser filtrados para retornar somente os do jogo solicitado.
 })
 
-app.post('/rentals', (req,res) => {
+app.post('/rentals', async (req,res) => {
+
+    const {customerId, gameId, daysRented} = req.body
+    const rentDate = dayjs().format('YYYY-MM-DD')
+    let returnDate = null;
+    let delayFee = null;
+
+    try {
+
+        const customerExists = await connection.query('SELECT * FROM customers WHERE id = $1', [customerId])
+        if (!customerExists.rows.length) return res.sendStatus(400)
+
+        const resultGame = await connection.query('SELECT * FROM games WHERE id = $1', [gameId, ])
+        if (!resultGame.rows.length) return res.sendStatus(400)
+        const originalPrice = daysRented * resultGame.rows[0].pricePerDay
+
+        const result = await connection.query(`INSERT INTO rentals ("customerId", "gameId", "rentDate", "daysRented", "returnDate", "originalPrice", "delayFee") 
+                                VALUES ($1, $2, $3, $4, $5, $6, $7)`, 
+                                [customerId, gameId, rentDate, daysRented, returnDate, originalPrice, delayFee])
+        return res.sendStatus(201)
+    }
+    catch (e) {
+        return res.sendStatus(500)
+    }
     //Request: body no formato: {customerId: 1,gameId: 1,daysRented: 3}
     //Response: status 201, sem dados
     //Regras: 
