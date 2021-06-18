@@ -191,16 +191,53 @@ app.put('/customers/:id', async (req,res) => {
 
 app.get('/rentals', async (req,res) => {
 
-    const result = await connection.query(`SELECT rentals.*, customers.* AS "rentals.customers", games.* AS "rentals.games"
-                                            FROM rentals FULL JOIN customers ON rentals."customerId" = customers.id 
-                                            FULL JOIN games ON games.id = rentals."gameId"`);
-    return res.send(result.rows)
-    //Response: lista com todos os aluguéis, contendo o customer e o game do aluguel em questão em cada aluguel
-    //Regras: 
-    //Caso seja passado um parâmetro customerId na query string da requisição, 
-    //os aluguéis devem ser filtrados para retornar somente os do cliente solicitado. 
-    //Caso seja passado um parâmetro gameId na query string da requisição, 
-    //os aluguéis devem ser filtrados para retornar somente os do jogo solicitado.
+    const customerId = req.query.customerId
+    const gameId = req.query.gameId
+
+    try {
+        if(customerId) {
+            const result = await connection.query(`SELECT rentals.*, 
+                                                    jsonb_build_object('name', customers.name, 'id', customers.id) AS customer,
+                                                    jsonb_build_object('id', games.id, 'name', games.name, 'categoryId', 
+                                                    games."categoryId", 'categoryName', categories.name) 
+                                                    AS game            
+                                                    FROM rentals 
+                                                    JOIN customers ON rentals."customerId" = customers.id
+                                                    JOIN games ON rentals."gameId" = games.id
+                                                    JOIN categories ON categories.id = games."categoryId"
+                                                    WHERE rentals."customerId" = $1`, [customerId])
+            return res.send(result.rows)
+        }
+
+        if(gameId) {
+            const result = await connection.query(`SELECT rentals.*, 
+                                                jsonb_build_object('name', customers.name, 'id', customers.id) AS customer,
+                                                jsonb_build_object('id', games.id, 'name', games.name, 'categoryId', 
+                                                games."categoryId", 'categoryName', categories.name) 
+                                                AS game            
+                                                FROM rentals 
+                                                JOIN customers ON rentals."customerId" = customers.id
+                                                JOIN games ON rentals."gameId" = games.id
+                                                JOIN categories ON categories.id = games."categoryId"
+                                                WHERE rentals."gameId" = $1`, [gameId])
+            return res.send(result.rows)
+        }
+
+        const result = await connection.query(`SELECT rentals.*, 
+                                                jsonb_build_object('name', customers.name, 'id', customers.id) AS customer,
+                                                jsonb_build_object('id', games.id, 'name', games.name, 'categoryId', 
+                                                games."categoryId", 'categoryName', categories.name) 
+                                                AS game            
+                                                FROM rentals 
+                                                JOIN customers ON rentals."customerId" = customers.id
+                                                JOIN games ON rentals."gameId" = games.id
+                                                JOIN categories ON categories.id = games."categoryId"`);
+        return res.send(result.rows).status(200) 
+    }
+
+    catch {
+        return res.sendStatus(500)
+    }
 })
 
 app.post('/rentals', async (req,res) => {
