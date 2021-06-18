@@ -213,10 +213,21 @@ app.post('/rentals', async (req,res) => {
     let returnDate = null;
     let delayFee = null;
 
-    try {
+    const schema = joi.object({
+        customerId: joi.number().positive().integer().required(),
+        gameId: joi.number().positive().integer().required(),
+        daysRented: joi.number().positive().integer().required(),
+    })
+    const isValid = schema.validate(req.body)
+    if(isValid.error) return res.sendStatus(404)
 
+    try {
         const customerExists = await connection.query('SELECT * FROM customers WHERE id = $1', [customerId])
         if (!customerExists.rows.length) return res.sendStatus(400)
+
+        const rentalsResult = await connection.query('SELECT * FROM rentals WHERE "returnDate" IS NULL')
+        const resultGames = await connection.query('SELECT * FROM games')
+        if(rentalsResult.rows.length >= resultGames.rows.length) return res.sendStatus(400)
 
         const resultGame = await connection.query('SELECT * FROM games WHERE id = $1', [gameId, ])
         if (!resultGame.rows.length) return res.sendStatus(400)
@@ -228,24 +239,52 @@ app.post('/rentals', async (req,res) => {
         return res.sendStatus(201)
     }
     catch (e) {
+        console.log(e)
         return res.sendStatus(500)
     }
-    //Request: body no formato: {customerId: 1,gameId: 1,daysRented: 3}
-    //Response: status 201, sem dados
-    //Regras: 
 })
 
-app.post('/rentals/:id/return', (req,res) => {
+app.post('/rentals/:id/return', async (req,res) => {//falta testar
+
+    const rentalId = req.params.id
+    const today = dayjs().format("YYYY-MM-DD");
+
+    try {
+        const rental = await connection.query('SELECT * FROM rentals WHERE id = $1', [rentalId])
+        if (!rental.rows.length) return res.sendStatus(404)
+        if (!rental.rows[0].returnDate) return res.sendStatus(400)
+
+        const game = await connection.query('SELECT * FROM rentals WHERE id = $1', [rental.rows[0].gameId])
+
+        const lateDays = dayjs(today).diff(rental.rows[0].rentDate, "day") - daysRented;
+        const fee = lateDays * (game.rows[0].pricePerDay)
+
+        const updateRental = await connection.query('UPDATE rentals SET returnDate = $1, delayFee = $2 WHERE id = $3', [dayjs().format('YYYY-MM-DD'), fee, rentalId])
+        
+        return res.sendStatus(200)
+    }
+    catch (e) {
+        console.log(e)
+        return res.sendStatus(500)
+    }
     //Response: status 200, sem dados
     //Regras:
 })
 
-app.delete('/rentals/:id', (req,res) => {
-    //Response: status 200, sem dados
-    //Regras
-    //Ao excluir um aluguel, deve verificar se o id fornecido existe. Se não, deve responder com status 404
-    //Ao excluir um aluguel, deve verificar se o aluguel já não está finalizado (ou seja, returnDate já está preenchido). 
-    //Se estiver, deve responder com status 400
+app.delete('/rentals/:id', async (req,res) => {//falta testar
+    const rentalId = req.params.id
+
+    try {
+        const rentalExists = await connection.query('SELECT * FROM rentals WHERE id = $1', [rentalId])
+        if(!rentalExists.rows.length) return res.sendStatus(404)
+        if(rentalExists.rows[0].returnDate) return res.sendStatus(400)
+
+        await connection.query('DELETE FROM rentals WHERE id = $1', [rentalId])
+        return res.sendStatus(200)
+    }
+    catch {
+        return res.sendStatus(500)
+    }
 })
 
 app.listen(4000);
