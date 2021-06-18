@@ -244,31 +244,31 @@ app.post('/rentals', async (req,res) => {
     }
 })
 
-app.post('/rentals/:id/return', async (req,res) => {//falta testar
+app.post('/rentals/:id/return', async (req,res) => {
 
     const rentalId = req.params.id
-    const today = dayjs().format("YYYY-MM-DD");
+    const today = dayjs();
 
     try {
         const rental = await connection.query('SELECT * FROM rentals WHERE id = $1', [rentalId])
         if (!rental.rows.length) return res.sendStatus(404)
-        if (!rental.rows[0].returnDate) return res.sendStatus(400)
+        if (rental.rows[0].returnDate !== null) return res.sendStatus(400)
 
-        const game = await connection.query('SELECT * FROM rentals WHERE id = $1', [rental.rows[0].gameId])
+        const game = await connection.query('SELECT * FROM games WHERE id = $1', [rental.rows[0].gameId])
 
-        const lateDays = dayjs(today).diff(rental.rows[0].rentDate, "day") - daysRented;
-        const fee = lateDays * (game.rows[0].pricePerDay)
+        const initialDay = rental.rows[0].rentDate
+        const lateDays = Math.round((new Date(today).getTime() - new Date(initialDay).getTime())/86400000);
 
-        const updateRental = await connection.query('UPDATE rentals SET returnDate = $1, delayFee = $2 WHERE id = $3', [dayjs().format('YYYY-MM-DD'), fee, rentalId])
+        const fee = lateDays * (game.rows[0].pricePerDay);
+
+        await connection.query('UPDATE rentals SET "returnDate" = $1, "delayFee" = $2 WHERE id = $3',
+                                [today, fee, rentalId])
         
         return res.sendStatus(200)
     }
     catch (e) {
-        console.log(e)
         return res.sendStatus(500)
     }
-    //Response: status 200, sem dados
-    //Regras:
 })
 
 app.delete('/rentals/:id', async (req,res) => {//falta testar
